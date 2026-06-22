@@ -116,4 +116,3 @@ class ProfileResponseSchema(BaseModel):
     avatar: HttpUrl
 
     model_config = {"from_attributes": True}
-#new changes
