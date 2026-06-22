@@ -6,7 +6,7 @@ from jose import ExpiredSignatureError
 from sqlalchemy import select, delete
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from security.passwords import hash_password
 from config import (
     get_jwt_auth_manager,
     get_settings,
@@ -429,7 +429,7 @@ async def reset_password(
         )
 
     try:
-        user.password = data.password
+        user._hashed_password = hash_password(data.password)
         await db.run_sync(lambda s: s.delete(token_record))
         await db.commit()
     except SQLAlchemyError:
