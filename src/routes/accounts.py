@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import cast
 
 from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks
+from jose import ExpiredSignatureError
 from sqlalchemy import select, delete
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,7 @@ from database import (
     PasswordResetTokenModel,
     RefreshTokenModel,
 )
-from exceptions import BaseSecurityError
+from exceptions import BaseSecurityError, TokenExpiredError, InvalidTokenError
 from schemas import (
     UserRegistrationRequestSchema,
     UserRegistrationResponseSchema,
@@ -135,8 +136,10 @@ async def register_user(
             detail="An error occurred during user creation.",
         ) from e
     else:
-        activation_link = (f"http://localhost:8000/api/v1/accounts/activate"
-        f"?token={activation_token.token}")
+        activation_link = (
+            f"http://localhost:8000/api/v1/accounts/activate"
+            f"?token={activation_token.token}"
+        )
         background_tasks.add_task(
             notificator.send_activation_email,
             str(user_data.email),
@@ -302,9 +305,10 @@ async def request_password_reset_token(
         reset_token = PasswordResetTokenModel(user_id=cast(int, user.id))
         db.add(reset_token)
         await db.flush()
-        reset_password_link = (f"http://localhost:8000/api/v1/accounts/"
-                               f"reset-password/complete/?token={reset_token.token}")
-
+        reset_password_link = (
+            f"http://localhost:8000/api/v1/accounts/reset-password/complete/"
+            f"?token={reset_token.token}"
+        )
         await db.commit()
 
     except SQLAlchemyError as e:
@@ -435,8 +439,7 @@ async def reset_password(
             detail="An error occurred while resetting the password.",
         )
     else:
-        login_link = f"http://localhost:8000/api/v1/accounts/login"
-
+        login_link = "http://localhost:8000/api/v1/accounts/login"
         background_tasks.add_task(
             notificator.send_password_reset_complete_email,
             str(user.email),
@@ -604,15 +607,26 @@ async def refresh_access_token(
             - 401 Unauthorized if the refresh token is not found.
             - 404 Not Found if the user associated with the token does not exist.
     """
+    user_id = None
     try:
         decoded_token = jwt_manager.decode_refresh_token(
             token_data.refresh_token
         )
         user_id = decoded_token.get("user_id")
-    except BaseSecurityError as error:
+    except (TokenExpiredError, ExpiredSignatureError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            detail="Token has expired.",
+        )
+    except (InvalidTokenError, BaseSecurityError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not validate credentials.",
         )
 
     stmt = select(RefreshTokenModel).filter_by(token=token_data.refresh_token)
