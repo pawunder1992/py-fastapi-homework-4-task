@@ -29,7 +29,6 @@ async def user_profile(
 ):
     try:
         verify_token = jwt_manager.decode_access_token(token)
-        print(verify_token)
     except TokenExpiredError:
         raise HTTPException(status_code=401, detail="Token has expired.")
     except InvalidTokenError:

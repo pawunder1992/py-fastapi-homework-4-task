@@ -135,7 +135,8 @@ async def register_user(
             detail="An error occurred during user creation.",
         ) from e
     else:
-        activation_link = f"http://localhost:8000/api/v1/accounts/activate?token={activation_token.token}"
+        activation_link = (f"http://localhost:8000/api/v1/accounts/activate"
+        f"?token={activation_token.token}")
         background_tasks.add_task(
             notificator.send_activation_email,
             str(user_data.email),
@@ -301,7 +302,8 @@ async def request_password_reset_token(
         reset_token = PasswordResetTokenModel(user_id=cast(int, user.id))
         db.add(reset_token)
         await db.flush()
-        reset_password_link = f"http://localhost:8000/api/v1/accounts/reset-password/complete/?token={reset_token.token}"
+        reset_password_link = (f"http://localhost:8000/api/v1/accounts/"
+                               f"reset-password/complete/?token={reset_token.token}")
 
         await db.commit()
 
